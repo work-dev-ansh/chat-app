@@ -10,7 +10,7 @@ import type {
 import { messageService } from "../src/services/message-service";
 import { prisma } from "../src/infrastructure/prisma";
 
-const port = Number(process.env.SOCKET_PORT ?? 3001);
+const port = Number(process.env.PORT ?? process.env.SOCKET_PORT ?? 3001);
 
 const isProduction = process.env.NODE_ENV === "production";
 const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
