@@ -1,4 +1,4 @@
-# Simuphish Enterprise Real-Time Chat Platform
+# Enterprise Real-Time Chat Platform
 
 A production-grade, real-time collaboration application built with **Next.js 16 (App Router)**, **Redux Toolkit**, **Socket.IO**, and **PostgreSQL (Prisma ORM)**. Engineered with strict focus on zero-trust security, bi-directional message synchronization, idempotency, and WCAG accessibility standards.
 
@@ -120,7 +120,7 @@ cp .env.example .env
 
 Key variables:
 ```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/simuphish_chat"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/app_chat"
 AUTH_SECRET="your-32-character-secret"
 NEXTAUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_SOCKET_URL="http://localhost:3001"
@@ -146,16 +146,14 @@ Open **http://localhost:3000** in your browser.
 
 ---
 
-## 📌 Known Limitations & Production Considerations
+## 📌 Production Architecture Considerations
 
-1. **Mobile Viewport Layout (< 768px)**:
-   - The application is currently optimized for desktop and tablet screens ($\ge 768\text{px}$).
-   - The sidebar has a fixed width (`width: 320px; min-width: 280px`). On mobile devices, a responsive drawer or hamburger navigation pattern is recommended before general consumer mobile deployment.
+1. **Horizontal Socket.IO Scaling & Clustering**:
+   - The Socket.IO server uses in-memory presence tracking (`Map<userId, Set<socketId>>`) optimal for single-process deployments. For horizontal scaling across multiple container instances, a Redis adapter (`@socket.io/redis-adapter`) and Redis sets should be configured for distributed presence and event broadcasting.
 
-2. **Read Receipts & Unread Count Reset**:
-   - The UI displays positive unread counts (`unreadCount > 0`) in the sidebar when projected by the server.
-   - Read receipt synchronization and active-room unread counter resets require a dedicated `/api/conversations/[id]/read` endpoint on the backend.
+2. **Persistent Read Status**:
+   - Server-side read status is stored in PostgreSQL via the `Membership.lastReadAt` timestamp and managed through the `/api/conversations/[id]/read` endpoint. Unread badges are computed against unread message timestamps.
 
-3. **Production Deployment & Clustering**:
-   - The Socket.IO server uses in-memory presence tracking (`Map<userId, Set<socketId>>`). For horizontal scaling across multiple node instances, a Redis adapter (`@socket.io/redis-adapter`) or Redis streams presence cluster should be configured.
+3. **Responsive Mobile Layout**:
+   - Mobile devices ($\le 768\text{px}$) automatically toggle between the conversations list and the active chat panel, with a native back button in the header.
 

@@ -19,7 +19,7 @@ if (isProduction && !secret) {
   throw new Error("[Socket Server] Fatal: AUTH_SECRET must be defined in production environment.");
 }
 
-const resolvedSecret = secret || "simuphish-development-secret-key-32chars";
+const resolvedSecret = secret || "nexuschat-development-secret-32chars";
 const broadcastSecret = process.env.INTERNAL_BROADCAST_SECRET ?? resolvedSecret;
 
 function getErrorMessage(error: unknown, fallback: string = "Internal error"): string {

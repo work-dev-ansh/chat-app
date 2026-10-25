@@ -75,7 +75,7 @@ export async function POST(request: Request) {
           const uploadStream = cloudinary.uploader.upload_stream(
             {
               resource_type: isVideo ? "video" : "image",
-              folder: "simu-chat-uploads",
+              folder: "chat-uploads",
             },
             (error, result) => {
               if (error || !result) {

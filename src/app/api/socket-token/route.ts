@@ -14,7 +14,7 @@ export async function GET() {
     const secret =
       process.env.AUTH_SECRET ||
       process.env.NEXTAUTH_SECRET ||
-      "simuphish-development-secret-key-32chars";
+      "nexuschat-development-secret-32chars";
 
     const token = await encode({
       token: {

@@ -203,7 +203,7 @@ export const messageService = {
       throw new Error("[MessageService] Fatal: AUTH_SECRET or INTERNAL_BROADCAST_SECRET must be defined in production.");
     }
 
-    const resolvedSecret = secret || "simuphish-development-secret-key-32chars";
+    const resolvedSecret = secret || "nexuschat-development-secret-32chars";
     const broadcastSecret = process.env.INTERNAL_BROADCAST_SECRET ?? resolvedSecret;
 
     try {
