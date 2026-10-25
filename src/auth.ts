@@ -71,6 +71,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
-  secret: process.env.AUTH_SECRET || "simuphish-development-secret-key-32chars",
+  secret: process.env.AUTH_SECRET || "nexuschat-development-secret-32chars",
   trustHost: true,
+  pages: {
+    signIn: "/login",
+  },
 });

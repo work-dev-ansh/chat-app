@@ -1,5 +1,13 @@
-import ChatWorkspace from "@/components/chats/ChatWorkspace";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
 
-export default function HomePage() {
-  return <ChatWorkspace />;
+export default async function HomePage() {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  redirect("/chat");
 }
+
