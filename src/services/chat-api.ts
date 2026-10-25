@@ -27,6 +27,12 @@ export const chatApi = {
 
     create: (userIds: string[], title?: string) =>
       apiClient.post<any>("/api/conversations", { userIds, title }),
+
+    markAsRead: (conversationId: string) =>
+      apiClient.post<{ conversationId: string; readAt: string }>(
+        `/api/conversations/${conversationId}/read`,
+        {},
+      ),
   },
 
   // ── Messages ─────────────────────────────────────────────────────

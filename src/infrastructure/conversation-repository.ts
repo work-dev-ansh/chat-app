@@ -120,47 +120,80 @@ export const conversationRepository = {
       orderBy: { updatedAt: "desc" },
     });
 
-    return conversations.map((conv) => {
-      const isGroup = Boolean(conv.title) || conv.memberships.length > 2;
-      const peerMemberships = conv.memberships.filter((m) => m.userId !== userId);
-      const peer = peerMemberships[0]?.user;
-      const lastMsg = conv.messages[0];
+    // Compute unread message count for each conversation based on user's lastReadAt
+    return Promise.all(
+      conversations.map(async (conv) => {
+        const isGroup = Boolean(conv.title) || conv.memberships.length > 2;
+        const currentMembership = conv.memberships.find((m) => m.userId === userId);
+        const peerMemberships = conv.memberships.filter((m) => m.userId !== userId);
+        const peer = peerMemberships[0]?.user;
+        const lastMsg = conv.messages[0];
 
-      let computedTitle = conv.title;
-      if (!computedTitle) {
-        if (isGroup) {
-          const names = peerMemberships
-            .map((m) => m.user.name)
-            .filter(Boolean) as string[];
-          computedTitle = names.length > 0 ? names.join(", ") : "Group Chat";
-        } else {
-          computedTitle = peer?.name ?? "Direct Message";
+        let computedTitle = conv.title;
+        if (!computedTitle) {
+          if (isGroup) {
+            const names = peerMemberships
+              .map((m) => m.user.name)
+              .filter(Boolean) as string[];
+            computedTitle = names.length > 0 ? names.join(", ") : "Group Chat";
+          } else {
+            computedTitle = peer?.name ?? "Direct Message";
+          }
         }
-      }
 
-      const allParticipantNames = conv.memberships
-        .map((m) => m.user.name)
-        .filter(Boolean) as string[];
+        const allParticipantNames = conv.memberships
+          .map((m) => m.user.name)
+          .filter(Boolean) as string[];
 
-      return {
-        id: conv.id,
-        type: isGroup ? "group" : "direct",
-        title: computedTitle,
-        avatarUrl: isGroup ? undefined : (peer?.avatarUrl ?? undefined),
-        peerUserId: isGroup ? undefined : peer?.id,
-        presence: "offline",
-        memberCount: conv.memberships.length,
-        participantNames: allParticipantNames,
-        lastMessage: lastMsg
-          ? {
-              id: lastMsg.id,
-              content: lastMsg.text,
-              senderId: lastMsg.senderId,
-              createdAt: lastMsg.createdAt.toISOString(),
-            }
-          : undefined,
-        unreadCount: 0,
-      };
+        // Count messages sent by other participants created after user's lastReadAt
+        const lastReadAt = currentMembership?.lastReadAt;
+        const unreadCount = await prisma.message.count({
+          where: {
+            conversationId: conv.id,
+            senderId: { not: userId },
+            ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+          },
+        });
+
+        return {
+          id: conv.id,
+          type: isGroup ? "group" : "direct",
+          title: computedTitle,
+          avatarUrl: isGroup ? undefined : (peer?.avatarUrl ?? undefined),
+          peerUserId: isGroup ? undefined : peer?.id,
+          presence: "offline",
+          memberCount: conv.memberships.length,
+          participantNames: allParticipantNames,
+          lastMessage: lastMsg
+            ? {
+                id: lastMsg.id,
+                content: lastMsg.text,
+                senderId: lastMsg.senderId,
+                createdAt: lastMsg.createdAt.toISOString(),
+              }
+            : undefined,
+          unreadCount,
+        };
+      }),
+    );
+  },
+
+  /**
+   * Marks a conversation as read for a given user by updating their membership lastReadAt timestamp.
+   */
+  async markAsRead(conversationId: string, userId: string): Promise<Date> {
+    const now = new Date();
+    await prisma.membership.update({
+      where: {
+        userId_conversationId: {
+          userId,
+          conversationId,
+        },
+      },
+      data: {
+        lastReadAt: now,
+      },
     });
+    return now;
   },
 };
