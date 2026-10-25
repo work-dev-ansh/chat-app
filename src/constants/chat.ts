@@ -1,0 +1,5 @@
+export const CHAT_CONFIG = {
+  MAX_MESSAGE_LENGTH: 2000,
+  WARN_MESSAGE_LENGTH: 1800,
+} as const;
+

@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  passwordHash  String?        // Optional for OAuth users
+  avatarUrl     String?
+  emailVerified DateTime?
+  image         String?        // Standard NextAuth field
+  createdAt     DateTime       @default(now())
+
+  // Auth Relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // Chat Relations
+  memberships   Membership[]
+  sentMessages  Message[]      @relation("MessageSender")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Conversation {
+  id          String       @id @default(cuid())
+  title       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  messages    Message[]
+}
+
+model Membership {
+  userId         String
+  conversationId String
+  joinedAt       DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, conversationId])
+  @@index([conversationId])
+}
+
+model Message {
+  id               String       @id @default(cuid())
+  clientMessageId  String
+  conversationId   String
+  senderId         String
+  kind             MessageKind  @default(TEXT)
+  text             String       @default("")
+  mediaUrl         String?
+  isForwarded      Boolean      @default(false)
+  forwardedFrom    String?
+  createdAt        DateTime     @default(now())
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender           User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@unique([senderId, clientMessageId])
+  @@index([conversationId, createdAt, id])
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+}

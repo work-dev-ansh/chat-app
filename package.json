@@ -4,23 +4,48 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "socket": "npx tsx server/socket-server.ts",
+    "dev:all": "concurrently \"next dev\" \"npx tsx server/socket-server.ts\"",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@anshuman/ui": "file:/Users/home/Desktop/simuphish-chat/anshuman-ui",
+    "@auth/prisma-adapter": "^2.11.3",
+    "@prisma/client": "^6.19.3",
+    "@reduxjs/toolkit": "^2.13.0",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.11.0",
+    "lucide-react": "^1.61.0",
     "next": "16.4.3",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-redux": "^9.3.0",
+    "sanitize-html": "^2.18.1",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
-    "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^9.1.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "jsdom": "^29.1.1",
+    "prisma": "^6.19.3",
+    "typescript": "^5",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

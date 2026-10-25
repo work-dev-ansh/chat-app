@@ -1,36 +1,161 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Simuphish Enterprise Real-Time Chat Platform
 
-## Getting Started
+A production-grade, real-time collaboration application built with **Next.js 16 (App Router)**, **Redux Toolkit**, **Socket.IO**, and **PostgreSQL (Prisma ORM)**. Engineered with strict focus on zero-trust security, bi-directional message synchronization, idempotency, and WCAG accessibility standards.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🏗️ Architecture & Technology Stack
+
+| Layer | Technology | Architectural Rationale |
+| :--- | :--- | :--- |
+| **Framework** | Next.js 16 (App Router) | Hybrid Server Components (RSC) for zero-bundle initial session resolution; focused Client Component islands for high-frequency interactive chat. |
+| **State Management** | Redux Toolkit (RTK) | Normalized state (`byId` / `byConversation`), memoized derived state using `createSelector` (Reselect), and local storage draft persistence. |
+| **Real-Time Transport** | Socket.IO (v4) | Bidirectional WebSocket transport with presence tracking, typing indicators, room joins, and optimistic message delivery. |
+| **Database & ORM** | PostgreSQL + Prisma ORM | Relational integrity for Users, Accounts, Sessions, Conversations, Memberships, and Messages with compound unique constraints. |
+| **Authentication** | NextAuth.js v5 (Auth.js) | Dual strategy: Google OAuth 2.0 + Instant Multi-User Profile Switcher; zero-trust server barrier validating session cookies. |
+| **Media Pipeline** | Cloudinary Pipeline | Server-side upload route (`/api/upload`) with strict MIME validation (images/videos) and size caps. |
+| **Testing** | Vitest + React Testing Library | Fast unit tests on pure/memoized selectors and behavioral component testing with `@testing-library/jest-dom`. |
+
+---
+
+## 📐 Server vs. Client Component Split
+
+```mermaid
+flowchart TD
+    subgraph Server Boundary [Server Components - Zero Client JS]
+        Layout["app/layout.tsx<br/>(Resolves Session via auth(), mounts Fonts & Theme)"]
+        Page["app/page.tsx<br/>(Server Metadata & Initial Context)"]
+        UploadRoute["app/api/upload/route.ts<br/>(Server-side MIME check & Cloudinary upload)"]
+        MsgRoute["app/api/messages/route.ts<br/>(Session security barrier & PostgreSQL persistence)"]
+    end
+
+    subgraph Client Boundary [Client Islands - 'use client']
+        Workspace["ChatWorkspace.tsx<br/>(Redux connection, Socket lifecycle)"]
+        Sidebar["ConversationSidebar.tsx<br/>(Contacts, Presence dots, Drop-to-forward target)"]
+        Composer["MessageComposer.tsx<br/>(Draft persistence, Drag-and-drop media, Debounced typing)"]
+        MsgList["MessageList.tsx & MessageItem.tsx<br/>(Draggable bubbles, Media rendering, Keyboard action)"]
+        ForwardModal["ForwardModal.tsx<br/>(WCAG 2.1 AA keyboard-accessible forward menu)"]
+        NewChatModal["NewChatModal.tsx<br/>(Directory browser & multi-member group creator)"]
+    end
+
+    Layout --> Page
+    Page --> Workspace
+    Workspace --> Sidebar
+    Workspace --> MsgList
+    Workspace --> Composer
+    Workspace --> ForwardModal
+    Workspace --> NewChatModal
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Architectural Decisions
+1. **Server Layout (`layout.tsx`)**: Resolves the session server-side before hydration, avoiding client cumulative layout shifts (CLS) and flashing unauthenticated states.
+2. **Client Islands (`ChatWorkspace`, `MessageComposer`, `MessageList`)**: Real-time WebSockets and drag-and-drop APIs require browser event listeners (`window`, `dataTransfer`, `WebSocket`). Wrapping them as isolated client components prevents shipping unnecessary JavaScript to non-interactive sections.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ⚡ Memoized Derived State with `createSelector`
 
-## Learn More
+All derived chat state is computed with RTK's memoized selectors (`src/store/slices/chat-slice.ts`) rather than re-evaluating inline during renders:
 
-To learn more about Next.js, take a look at the following resources:
+- `selectEnrichedConversations`: Combines conversations with the live `onlineUserIds` Set. Only recalculates when the conversation list or online user IDs change.
+- `selectActiveConversation`: Memoizes the active conversation lookup by ID.
+- `selectActiveMessages`: Retrieves messages for the active room with zero recalculation cost on unrelated re-renders.
+- `selectActiveDraft`: Pulls the unsent input draft scoped to the active conversation.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🛡️ Reliability, Security & Edge Case Handling
 
-## Deploy on Vercel
+### 1. Dual Transport with Unified Application Logic
+- **Architecture**: `Socket.IO` and `Next.js REST API` act strictly as transport layers; neither contains independent chat domain logic.
+- **Shared Message Service** (`src/services/message-service.ts`): All authorization, membership checks, persistence, duplicate handling, and cross-transport event publishing live in a single service layer.
+- **REST-to-Socket Delivery**: Messages submitted via the REST fallback trigger an authenticated internal broadcast (`POST /internal/broadcast`) on the Socket.IO server, ensuring connected peers receive live updates immediately without waiting for HTTP polling.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. Cryptographic Socket Handshake Authentication
+- **Zero-Trust Identity**: The socket server rejects raw client-provided identities and fallback user IDs.
+- **Handshake Verification**: Connections verify the NextAuth session token via Auth.js JWT decryption (`getToken`) on the handshake cookie using the server's cryptographic `AUTH_SECRET`. Unauthenticated connections are rejected with 401 handshake errors.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 3. Idempotency & Optimistic UI Reconciliation
+- **Logical Client ID**: The client assigns a stable `clientMessageId` for each send attempt.
+- **Atomic Database Constraints**: Enforced by composite unique constraint `@@unique([senderId, clientMessageId])`.
+- **Duplicate & Retry Protection**: If network latency triggers retries, database duplicate errors (`P2002`) are caught and return the existing persisted message cleanly.
+- **Redux Reconciliation**: Messages transition seamlessly from `"sending"` to `"sent"` or `"failed"` without UI jumps or duplicated entries.
+
+### 4. Accessibility Fallback (WCAG 2.1 AA)
+- HTML5 drag-and-drop is supported for dragging messages onto sidebar contacts to forward.
+- Because native drag-and-drop is not accessible via screen readers or keyboards, every message bubble also includes an accessible **Forward** button opening a keyboard-navigable modal dialog (`ForwardModal.tsx`).
+
+### 5. Draft Persistence Across Reloads
+- Unsent composer input is synchronized to `localStorage` scoped per conversation ID (`chat_draft_<convId>`). Switching conversations or refreshing the browser restores unsent text seamlessly.
+
+---
+
+## 🧪 Automated Test Suite
+
+Run the Vitest test suite covering memoized selectors, deduplication reducers, and message list behavioral rendering:
+
+```bash
+npm run test
+```
+
+For live watch mode:
+```bash
+npm run test:watch
+```
+
+---
+
+## 🚀 Local Development Setup
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env` and configure your credentials:
+```bash
+cp .env.example .env
+```
+
+Key variables:
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/simuphish_chat"
+AUTH_SECRET="your-32-character-secret"
+NEXTAUTH_URL="http://localhost:3000"
+NEXT_PUBLIC_SOCKET_URL="http://localhost:3001"
+```
+
+### 3. Initialize Database
+```bash
+npx prisma db push
+npx tsx prisma/seed.ts
+```
+
+### 4. Run Development Servers
+```bash
+# Run both Next.js and Socket.IO concurrently:
+npm run dev:all
+
+# Or run them in separate terminals:
+npm run dev      # Terminal 1: Next.js App (Port 3000)
+npm run socket   # Terminal 2: Socket.IO Server (Port 3001)
+```
+
+Open **http://localhost:3000** in your browser.
+
+---
+
+## 📌 Known Limitations & Production Considerations
+
+1. **Mobile Viewport Layout (< 768px)**:
+   - The application is currently optimized for desktop and tablet screens ($\ge 768\text{px}$).
+   - The sidebar has a fixed width (`width: 320px; min-width: 280px`). On mobile devices, a responsive drawer or hamburger navigation pattern is recommended before general consumer mobile deployment.
+
+2. **Read Receipts & Unread Count Reset**:
+   - The UI displays positive unread counts (`unreadCount > 0`) in the sidebar when projected by the server.
+   - Read receipt synchronization and active-room unread counter resets require a dedicated `/api/conversations/[id]/read` endpoint on the backend.
+
+3. **Production Deployment & Clustering**:
+   - The Socket.IO server uses in-memory presence tracking (`Map<userId, Set<socketId>>`). For horizontal scaling across multiple node instances, a Redis adapter (`@socket.io/redis-adapter`) or Redis streams presence cluster should be configured.
+
