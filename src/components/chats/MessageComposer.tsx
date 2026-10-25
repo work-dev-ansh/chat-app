@@ -202,7 +202,7 @@ export default function MessageComposer({
         </div>
       )}
 
-      <form className="composer-form" onSubmit={handleSubmit}>
+      <form className="composer-form" onSubmit={handleSubmit} aria-label={`Send message to ${conversationName}`}>
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -210,6 +210,8 @@ export default function MessageComposer({
           accept="image/*,video/*"
           style={{ display: "none" }}
           data-testid="composer-file-input"
+          aria-hidden="true"
+          tabIndex={-1}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFileUpload(file);
@@ -232,8 +234,7 @@ export default function MessageComposer({
         <div className="composer-input-container">
           <Input
             id="message-input"
-            label="Write a message"
-            hideLabel
+            aria-label={`Message ${conversationName}`}
             value={text}
             onChange={(event) => handleChange(event.target.value)}
             placeholder={`Message ${conversationName}... (Drag media or type)`}
@@ -247,6 +248,7 @@ export default function MessageComposer({
           variant="primary"
           size="md"
           className="composer-send-btn"
+          aria-label="Send message"
           disabled={!text.trim() && !pendingMedia}
         >
           <span>Send</span>

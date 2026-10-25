@@ -37,6 +37,14 @@ export default function ForwardModal({ onForward, currentUserId }: ForwardModalP
       return;
     }
 
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        dispatch(closeForwardModal());
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
     if (activeTab === "directory" && directoryUsers.length === 0) {
       setLoadingUsers(true);
       chatApi.users
@@ -45,7 +53,11 @@ export default function ForwardModal({ onForward, currentUserId }: ForwardModalP
         .catch((err) => console.error("Failed to load directory for forwarding:", err))
         .finally(() => setLoadingUsers(false));
     }
-  }, [isOpen, activeTab, currentUserId, directoryUsers.length]);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, activeTab, currentUserId, directoryUsers.length, dispatch]);
 
   if (!isOpen || !message) return null;
 

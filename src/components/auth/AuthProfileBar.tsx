@@ -2,7 +2,7 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Avatar, Badge, Button, Spinner, SettingsIcon } from "@anshuman/ui";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 /**
  * Profile & Account Switcher rendered at the bottom of the conversation sidebar.
@@ -11,6 +11,30 @@ import { useState } from "react";
 export default function AuthProfileBar() {
   const { data: session, status } = useSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    }
+
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const demoAccounts = [
     { email: "anshuman@example.com", name: "Anshuman Singh" },
@@ -79,7 +103,7 @@ export default function AuthProfileBar() {
   const user = session.user;
 
   return (
-    <div className="sidebar-profile-container">
+    <div className="sidebar-profile-container" ref={containerRef}>
       <button
         type="button"
         className="sidebar-profile clickable"

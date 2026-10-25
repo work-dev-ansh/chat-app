@@ -71,8 +71,10 @@ export default function MessageList({
       ref={containerRef}
       onScroll={handleScroll}
       className="message-list"
-      aria-label="Messages"
+      role="log"
+      aria-label="Message history"
       aria-live="polite"
+      aria-relevant="additions"
     >
       {messages.length === 0 ? (
         <div

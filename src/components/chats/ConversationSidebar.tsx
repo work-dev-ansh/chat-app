@@ -66,7 +66,7 @@ export default function ConversationSidebar({
 
         <div className="brand-title-wrap">
           <div className="brand-header-row">
-            <h1>SimuPhish</h1>
+            <h1>NexusChat</h1>
             <Badge variant="primary">SECURE</Badge>
           </div>
           <p>Enterprise Workspace</p>
@@ -135,7 +135,9 @@ export default function ConversationSidebar({
                 onDragOver={(e) => handleDragOver(e, conv.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, conv.id)}
-                aria-pressed={isActive}
+                aria-pressed={isActive ? "true" : "false"}
+                aria-current={isActive ? "true" : undefined}
+                aria-label={`${conv.title}, ${previewText}${conv.unreadCount > 0 ? `, ${conv.unreadCount} unread` : ""}`}
                 title={
                   draggedMessage
                     ? `Drop here to forward message to ${conv.title}`

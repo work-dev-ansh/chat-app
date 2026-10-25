@@ -46,6 +46,14 @@ export default function NewChatModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
     let isMounted = true;
     setLoading(true);
 
@@ -60,9 +68,10 @@ export default function NewChatModal({
       });
 
     return () => {
+      document.removeEventListener("keydown", handleKeyDown);
       isMounted = false;
     };
-  }, [isOpen]);
+  }, [isOpen, onClose, currentUserId]);
 
   // Reset modal state on close
   useEffect(() => {
