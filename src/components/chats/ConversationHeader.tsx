@@ -9,6 +9,7 @@ interface ConversationHeaderProps {
   type?: "direct" | "group";
   memberCount?: number;
   participants?: string[];
+  onBack?: () => void;
 }
 
 export default function ConversationHeader({
@@ -17,6 +18,7 @@ export default function ConversationHeader({
   type = "direct",
   memberCount,
   participants,
+  onBack,
 }: ConversationHeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -58,6 +60,19 @@ export default function ConversationHeader({
 
   return (
     <header className="chat-header">
+      {onBack && (
+        <button
+          type="button"
+          className="mobile-back-btn"
+          onClick={onBack}
+          aria-label="Back to conversations"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+      )}
+
       <div className="avatar-with-badge">
         <Avatar name={name} size="md" />
         {!isGroup && (

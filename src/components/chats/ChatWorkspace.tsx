@@ -9,6 +9,7 @@ import MessageComposer from "./MessageComposer";
 import ConversationSidebar from "./ConversationSidebar";
 import NewChatModal from "./NewChatModal";
 import ForwardModal from "./ForwardModal";
+import { Button, Spinner } from "@anshuman/ui";
 import { chatApi } from "@/services/chat-api";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -40,7 +41,7 @@ import {
  * - Drag-and-drop message forwarding and accessible conversation management
  */
 export default function ChatWorkspace() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const currentUserId = session?.user?.id ?? "";
   const dispatch = useAppDispatch();
 
@@ -95,6 +96,11 @@ export default function ChatWorkspace() {
         }
       })
       .catch((err) => console.error("Failed to load messages:", err));
+
+    // Persist read status on server to reset unreadCount in database
+    chatApi.conversations.markAsRead(selectedConversationId).catch((err) => {
+      console.warn("[Read Receipt] Failed to mark conversation as read on server:", err);
+    });
 
     return () => {
       isMounted = false;
@@ -364,9 +370,10 @@ export default function ChatWorkspace() {
   }
 
   const activeIsOnline = activeConversation?.presence === "online";
+  const hasActiveConversation = Boolean(selectedConversationId);
 
   return (
-    <main className="chat-workspace">
+    <main className={`chat-workspace ${hasActiveConversation ? "mobile-conversation-active" : "mobile-sidebar-active"}`}>
       <ConversationSidebar
         conversations={conversations}
         selectedConversationId={selectedConversationId}
@@ -388,6 +395,7 @@ export default function ChatWorkspace() {
               type={activeConversation.type}
               memberCount={activeConversation.memberCount}
               participants={activeConversation.participantNames}
+              onBack={() => dispatch(setActiveConversationId(""))}
             />
 
             <MessageList
@@ -416,7 +424,19 @@ export default function ChatWorkspace() {
         ) : (
           <div className="empty-workspace">
             {loadingInitial ? (
-              <p>Loading conversations...</p>
+              <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                }}
+              >
+                <Spinner size="lg" />
+                <p>Loading conversations...</p>
+              </div>
             ) : !currentUserId ? (
               <div className="empty-state-content">
                 <h3>Sign in to start chatting</h3>
@@ -430,12 +450,13 @@ export default function ChatWorkspace() {
                 <p>
                   Click the <strong>+</strong> button in the sidebar to start a chat with anyone on the team.
                 </p>
-                <button
-                  className="primary-btn"
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={() => dispatch(setNewChatModalOpen(true))}
                 >
                   Start a conversation
-                </button>
+                </Button>
               </div>
             )}
           </div>
