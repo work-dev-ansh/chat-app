@@ -113,6 +113,34 @@ export const chatSlice = createSlice({
     ) {
       state.messagesByConversation[action.payload.conversationId] = action.payload.messages;
     },
+    mergeMessagesForConversation(
+      state,
+      action: PayloadAction<{ conversationId: string; messages: ChatMessage[] }>,
+    ) {
+      const { conversationId, messages: incoming } = action.payload;
+      const currentList = state.messagesByConversation[conversationId] ?? [];
+      
+      // Preserve any in-flight optimistic messages that have not yet been persisted
+      const inFlightOptimistic = currentList.filter(
+        (m) =>
+          m.status === "sending" &&
+          !incoming.some(
+            (inc) =>
+              inc.id === m.id ||
+              (inc.clientMessageId && m.clientMessageId && inc.clientMessageId === m.clientMessageId),
+          ),
+      );
+
+      // Map incoming messages to ensure uniqueness by ID and clientMessageId
+      const mergedMap = new Map<string, ChatMessage>();
+      for (const msg of incoming) {
+        mergedMap.set(msg.id, msg);
+      }
+
+      // Append remaining in-flight optimistic messages at the end
+      const finalizedIncoming = Array.from(mergedMap.values());
+      state.messagesByConversation[conversationId] = [...finalizedIncoming, ...inFlightOptimistic];
+    },
     addMessage(state, action: PayloadAction<ChatMessage>) {
       const msg = action.payload;
       const list = state.messagesByConversation[msg.conversationId] ?? [];
@@ -234,6 +262,7 @@ export const {
   setConversations,
   setActiveConversationId,
   setMessagesForConversation,
+  mergeMessagesForConversation,
   addMessage,
   replaceOptimisticMessage,
   markMessageFailed,

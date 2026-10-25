@@ -16,6 +16,7 @@ import {
   setConversations,
   setActiveConversationId,
   setMessagesForConversation,
+  mergeMessagesForConversation,
   addMessage,
   replaceOptimisticMessage,
   markMessageFailed,
@@ -114,6 +115,35 @@ export default function ChatWorkspace() {
       handleIncomingSocketMessage,
     );
 
+  // Adaptive HTTP polling fallback when WebSocket is disconnected
+  useEffect(() => {
+    if (isConnected || !selectedConversationId) return;
+
+    let isPolling = false;
+    const interval = setInterval(async () => {
+      // Avoid overlapping polling requests if one takes longer than interval or document is hidden
+      if (isPolling || typeof document !== "undefined" && document.hidden) return;
+      isPolling = true;
+
+      try {
+        const freshMessages = await chatApi.messages.list(selectedConversationId);
+        dispatch(
+          mergeMessagesForConversation({
+            conversationId: selectedConversationId,
+            messages: freshMessages,
+          }),
+        );
+        loadConversations();
+      } catch (err) {
+        console.warn("[Polling Fallback] Failed to fetch message updates:", err);
+      } finally {
+        isPolling = false;
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isConnected, selectedConversationId, dispatch, loadConversations]);
+
   // Sync socket presence and typing into Redux store only when changed
   useEffect(() => {
     const newOnlineList = Array.from(onlineUserIds);
@@ -172,23 +202,32 @@ export default function ChatWorkspace() {
     dispatch(addMessage(optimisticMsg));
 
     try {
+      let created: ChatMessage;
+
       if (isConnected) {
-        const created = await sendSocketMessage({
-          conversationId: selectedConversationId,
-          content,
-          type: media?.type ?? "text",
-          mediaUrl: media?.url ?? null,
-          clientMessageId,
-        });
-        dispatch(
-          replaceOptimisticMessage({
+        try {
+          created = await sendSocketMessage({
             conversationId: selectedConversationId,
-            tempId,
-            realMessage: { ...created, status: "sent", clientMessageId },
-          }),
-        );
+            content,
+            type: media?.type ?? "text",
+            mediaUrl: media?.url ?? null,
+            clientMessageId,
+            timeoutMs: 4000,
+          });
+        } catch (socketErr) {
+          console.warn("[Message Send] Socket acknowledgement failed or timed out. Falling back to idempotent REST API:", socketErr);
+          // Fallback to REST using the exact same clientMessageId
+          created = await chatApi.messages.send({
+            conversationId: selectedConversationId,
+            senderId: currentUserId,
+            content,
+            type: media?.type ?? "text",
+            mediaUrl: media?.url ?? null,
+            clientMessageId,
+          });
+        }
       } else {
-        const created = await chatApi.messages.send({
+        created = await chatApi.messages.send({
           conversationId: selectedConversationId,
           senderId: currentUserId,
           content,
@@ -196,17 +235,18 @@ export default function ChatWorkspace() {
           mediaUrl: media?.url ?? null,
           clientMessageId,
         });
-        dispatch(
-          replaceOptimisticMessage({
-            conversationId: selectedConversationId,
-            tempId,
-            realMessage: { ...created, status: "sent", clientMessageId },
-          }),
-        );
       }
+
+      dispatch(
+        replaceOptimisticMessage({
+          conversationId: selectedConversationId,
+          tempId,
+          realMessage: { ...created, status: "sent", clientMessageId },
+        }),
+      );
       loadConversations();
     } catch (err) {
-      console.error("Failed to send message:", err);
+      console.error("Failed to send message over both WebSocket and REST fallback:", err);
       dispatch(
         markMessageFailed({
           conversationId: selectedConversationId,
@@ -244,25 +284,35 @@ export default function ChatWorkspace() {
     dispatch(addMessage(optimisticMsg));
 
     try {
+      let created: ChatMessage;
+
       if (isConnected) {
-        const created = await sendSocketMessage({
-          conversationId: targetConversationId,
-          content: forwardContent,
-          type: messageToForward.type,
-          mediaUrl: messageToForward.mediaUrl,
-          isForwarded: true,
-          forwardedFrom: messageToForward.senderId,
-          clientMessageId,
-        });
-        dispatch(
-          replaceOptimisticMessage({
+        try {
+          created = await sendSocketMessage({
             conversationId: targetConversationId,
-            tempId,
-            realMessage: { ...created, status: "sent", clientMessageId },
-          }),
-        );
+            content: forwardContent,
+            type: messageToForward.type,
+            mediaUrl: messageToForward.mediaUrl,
+            isForwarded: true,
+            forwardedFrom: messageToForward.senderId,
+            clientMessageId,
+            timeoutMs: 4000,
+          });
+        } catch (socketErr) {
+          console.warn("[Forward Send] Socket acknowledgement failed or timed out. Falling back to idempotent REST API:", socketErr);
+          created = await chatApi.messages.send({
+            conversationId: targetConversationId,
+            senderId: currentUserId,
+            content: forwardContent,
+            type: messageToForward.type,
+            mediaUrl: messageToForward.mediaUrl,
+            isForwarded: true,
+            forwardedFrom: messageToForward.senderId,
+            clientMessageId,
+          });
+        }
       } else {
-        const created = await chatApi.messages.send({
+        created = await chatApi.messages.send({
           conversationId: targetConversationId,
           senderId: currentUserId,
           content: forwardContent,
@@ -272,19 +322,20 @@ export default function ChatWorkspace() {
           forwardedFrom: messageToForward.senderId,
           clientMessageId,
         });
-        dispatch(
-          replaceOptimisticMessage({
-            conversationId: targetConversationId,
-            tempId,
-            realMessage: { ...created, status: "sent", clientMessageId },
-          }),
-        );
       }
+
+      dispatch(
+        replaceOptimisticMessage({
+          conversationId: targetConversationId,
+          tempId,
+          realMessage: { ...created, status: "sent", clientMessageId },
+        }),
+      );
       // Switch view to target conversation to show the forwarded message
       dispatch(setActiveConversationId(targetConversationId));
       loadConversations();
     } catch (err) {
-      console.error("Failed to forward message:", err);
+      console.error("Failed to forward message over both WebSocket and REST fallback:", err);
       dispatch(
         markMessageFailed({
           conversationId: targetConversationId,

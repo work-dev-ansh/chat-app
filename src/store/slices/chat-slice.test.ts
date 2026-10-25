@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   chatReducer,
   addMessage,
+  mergeMessagesForConversation,
   replaceOptimisticMessage,
   markMessageFailed,
   setDraft,
@@ -160,6 +161,58 @@ describe("Redux chat-slice & memoized selectors", () => {
 
     // Should NOT duplicate the message
     expect(stateWithIncoming.messagesByConversation["conv-1"]).toHaveLength(2);
+  });
+
+  it("mergeMessagesForConversation preserves in-flight sending messages while deduplicating persisted items", () => {
+    const stateWithOptimistic = chatReducer(
+      initialBaseState.chat,
+      addMessage({
+        id: "temp-cmsg-in-flight",
+        conversationId: "conv-1",
+        senderId: "user-me",
+        content: "Still waiting for persistence ack",
+        type: "text",
+        clientMessageId: "cmsg-in-flight",
+        status: "sending",
+        createdAt: new Date().toISOString(),
+      }),
+    );
+
+    expect(stateWithOptimistic.messagesByConversation["conv-1"]).toHaveLength(2);
+
+    // Merge incoming messages from polling
+    const mergedState = chatReducer(
+      stateWithOptimistic,
+      mergeMessagesForConversation({
+        conversationId: "conv-1",
+        messages: [
+          {
+            id: "msg-1",
+            conversationId: "conv-1",
+            senderId: "user-2",
+            content: "Hello there!",
+            type: "text",
+            status: "sent",
+            createdAt: "2026-10-24T10:00:00Z",
+          },
+          {
+            id: "msg-persisted-from-other",
+            conversationId: "conv-1",
+            senderId: "user-2",
+            content: "New incoming message from Bob",
+            type: "text",
+            status: "sent",
+            createdAt: "2026-10-24T10:05:00Z",
+          },
+        ],
+      }),
+    );
+
+    const messages = mergedState.messagesByConversation["conv-1"];
+    // Should have msg-1, msg-persisted-from-other, AND the preserved in-flight optimistic message
+    expect(messages).toHaveLength(3);
+    expect(messages.some((m) => m.id === "temp-cmsg-in-flight" && m.status === "sending")).toBe(true);
+    expect(messages.some((m) => m.id === "msg-persisted-from-other")).toBe(true);
   });
 
   it("replaceOptimisticMessage cleanly reconciles pending optimistic message to confirmed server message", () => {

@@ -138,7 +138,7 @@ export function useChatSocket(
     });
   }, [activeConversationId, isConnected]);
 
-  // 5. Send message via WebSocket
+  // 5. Send message via WebSocket with bounded acknowledgement timeout
   function sendSocketMessage(options: {
     content: string;
     conversationId?: string;
@@ -147,13 +147,23 @@ export function useChatSocket(
     isForwarded?: boolean;
     forwardedFrom?: string | null;
     clientMessageId?: string;
+    timeoutMs?: number;
   }): Promise<ChatMessage> {
     const targetConvId = options.conversationId || activeConversationId;
+    const timeoutDuration = options.timeoutMs ?? 5000;
 
     return new Promise((resolve, reject) => {
       if (!socketRef.current || !isConnected) {
         return reject(new Error("Socket not connected"));
       }
+
+      let hasSettled = false;
+      const timer = setTimeout(() => {
+        if (!hasSettled) {
+          hasSettled = true;
+          reject(new Error("Socket acknowledgement timed out"));
+        }
+      }, timeoutDuration);
 
       socketRef.current.emit(
         "message:send",
@@ -167,6 +177,10 @@ export function useChatSocket(
           clientMessageId: options.clientMessageId,
         },
         (ack) => {
+          if (hasSettled) return;
+          hasSettled = true;
+          clearTimeout(timer);
+
           if (ack.ok && ack.data) {
             resolve(ack.data);
           } else {
